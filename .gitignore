@@ -1,0 +1,15 @@
+# IDE/Editor folders
+.vscode/
+.idea/
+.history/
+
+# Shell/System
+.zsh_history
+.bash_history
+.DS_Store
+
+# Sensitive/Local data
+*.secret
+*.key
+.env
+.env.*

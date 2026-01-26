@@ -1,7 +1,28 @@
 #!/bin/bash
+# Define the source directory (where GitHub clones the dotfiles)
+SOURCE_DIR=$(pwd)
 
+# List of files/folders to symlink to home
+FILES_TO_LINK=(".zshrc" ".bashrc" "mysnippets" "rojcode" "rojfile" "rojfunc" "rojgam" "rojimg" "rojlnx" "rojsec" "rojssh" "rojtxt" "rojutil")
+
+echo "Linking dotfiles from $SOURCE_DIR to $HOME..."
+
+for FILE in "${FILES_TO_LINK[@]}"; do
+    if [ -e "$SOURCE_DIR/$FILE" ]; then
+        ln -sf "$SOURCE_DIR/$FILE" "$HOME/$FILE"
+        echo "✅ Linked $FILE"
+    else
+        echo "❌ $FILE not found, skipping"
+    fi
+done
+
+# Set ZSH as the shell if available
+if [ -x "$(command -v zsh)" ]; then
+    sudo chsh -s $(which zsh) $(whoami)
+fi
 # '.dotfiles' locaiton in the CodeSpace
-DOTFILES_DIR="$HOME/.dotfiles"
+# Use the actual source directory instead of a hardcoded ~/.dotfiles
+DOTFILES_DIR="$SOURCE_DIR"
 
 # Install Oh My Zsh (Non-interactive)
 if [ ! -d "$HOME/.oh-my-zsh" ]; then

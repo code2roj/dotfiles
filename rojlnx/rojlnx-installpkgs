@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# install_packages.sh: Installs a list of packages using the appropriate package manager.
+#
+# This script automatically detects the system's package manager (apk, apt, or brew)
+# and attempts to install the provided packages. It provides feedback on successful
+# installations or lists packages that failed to install.
+#
+# Arguments:
+#   - A space-separated list of package names (e.g., ./install_packages.sh nginx git).
+#   - A single argument containing a comma-separated list (e.g., ./install_packages.sh "nginx,git,curl").
+#   - A single argument specifying a text file with one package name per line
+#     (e.g., ./install_packages.sh packages.txt).
+#
+# Returns:
+#   0: All specified packages were installed successfully.
+#   1: No supported package manager was found, or one or more packages failed to install.
+#   2: Invalid arguments or file not found.
+
+# Declare variables
+declare -a packages=() # Use declare -a for explicit array declaration
+declare -a failed_to_install=()
+install_command=""
+package_manager=""
+
+# --- Function to display usage ---
+display_usage() {
+    echo "Usage: $0 <package1> [package2] ..."
+    echo "       $0 \"package1,package2,package3\""
+    echo "       $0 <packages_file.txt>"
+    echo ""
+    echo "Provide package names either as a space-separated list,"
+    echo "a single comma-separated string, or a path to a text file"
+    echo "with one package name per line."
+}
+
+# --- Parse Arguments ---
+if [ ${#@} -eq 0 ]; then
+    echo "Error: No arguments provided."
+    display_usage
+    exit 2
+elif [ ${#@} -eq 1 ]; then
+    arg="$1"
+    # Check if it's a file
+    if [[ "$arg" == *.txt ]] && [ -f "$arg" ]; then
+        echo "Reading packages from file: '$arg'"
+        # Read packages from file, trim whitespace and filter empty lines
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            trimmed_line=$(echo "$line" | xargs) # Trim leading/trailing whitespace
+            if [ -n "$trimmed_line" ]; then # Only add non-empty lines
+                packages+=("$trimmed_line")
+            fi
+        done < "$arg"
+        if [ ${#packages[@]} -eq 0 ]; then
+            echo "Error: The file '$arg' is empty or contains no valid package names."
+            exit 2
+        fi
+    # Check if it's a comma-separated string
+    elif [[ "$arg" == *","* ]]; then
+        echo "Parsing comma-separated packages."
+        IFS=',' read -ra packages <<< "$arg"
+    else
+        # It's a single package name
+        packages+=("$arg")
+    fi
+else
+    # It's a space-separated list (default behavior)
+    echo "Parsing space-separated packages."
+    packages=("$@")
+fi
+
+# Check if after parsing, we actually have packages to install
+if [ ${#packages[@]} -eq 0 ]; then
+    echo "Error: No packages to install after processing arguments."
+    display_usage
+    exit 2
+fi
+
+
+# --- Determine the appropriate package manager ---
+# Check for apk (Alpine Linux)
+if command -v apk >/dev/null 2>&1; then
+    install_command="apk add --no-cache"
+    package_manager="apk"
+# Check for apt (Debian/Ubuntu)
+elif command -v apt >/dev/null 2>&1; then
+    # Ensure apt-get is used for scripting for consistency and robustness
+    install_command="apt-get install -y"
+    package_manager="apt"
+# Check for brew (macOS/Linuxbrew)
+elif command -v brew >/dev/null 2>&1; then
+    install_command="brew install"
+    package_manager="brew"
+else
+    echo "Error: No supported package manager (apk, apt, or brew) found on this system."
+    exit 1
+fi
+
+echo "Using ${package_manager} to install packages."
+
+# --- Attempt to install each package ---
+for pkg in "${packages[@]}"; do
+    # Skip empty strings that might result from splitting or file reading
+    if [ -z "$pkg" ]; then
+        continue
+    fi
+
+    echo "Attempting to install: ${pkg}..."
+    # Execute the install command. Redirect stdout and stderr to /dev/null for quiet output.
+    if ! ${install_command} "${pkg}" >/dev/null 2>&1; then
+        echo "Warning: Failed to install ${pkg}."
+        failed_to_install+=("${pkg}")
+    else
+        echo "Successfully installed: ${pkg}."
+    fi
+done
+
+# --- Provide a summary of the installation results ---
+if [ "${#failed_to_install[@]}" -ne 0 ]; then
+    echo "--- Installation Summary ---"
+    echo "The following packages failed to install: ${failed_to_install[*]}"
+    exit 1
+else
+    echo "--- Installation Summary ---"
+    echo "All specified packages were installed successfully."
+    exit 0
+fi

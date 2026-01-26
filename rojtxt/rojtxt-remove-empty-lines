@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# This script receives a text file as command line argument and removes empty lines from a text file.
+# Usage: rojtxt-remove_empty_lines <text_file>
+
+# check if correct number of arguments is provided
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: rojtxt-remove_empty_lines <text_file>"
+    exit 1
+fi
+
+# check if the file exists
+if [ ! -f "$1" ]; then
+    echo "File not found!"
+    exit 1
+fi
+
+# remove empty lines from the file
+sed -i '/^$/d' "$1"
+# check if the sed command was successful
+if [ $? -eq 0 ]; then
+    echo "Empty lines removed from $1"
+else
+    echo "Failed to remove empty lines from $1"
+    exit 1
+fi
+

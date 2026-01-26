@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Check if the correct number of arguments is provided
+#if [ "$#" -ne 1 ]; then
+#    echo "Usage: $0 <directory> <text-to-add>"
+#    exit 1
+#fi
+
+directory="/home/roj/rojsidian/0-in/gpt-responses/extra-sum/"
+text="""
+summerize the bellow text in only one sentene. only provide the summary. don't write any explanation or introduction.
+for the generation of the response follow these rules carefully:
+
+- Read the text precisely.
+- understand it's semantics, meaning, key message, and core concept.
+- write the response in a concise, clear, and logical manner.
+- be careful to not loose any key content
+
+## The text to process:
+"""
+
+# Iterate through all files in the directory
+for file in "$directory"/*; do
+    if [ -f "$file" ]; then
+        echo -e "$text\n" | cat - "$file" > temp && mv temp "$file"
+    fi
+done
+
+echo "Text prepended to all files in $directory"

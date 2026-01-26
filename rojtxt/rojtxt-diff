@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# This script receives 2 text files as arguments, and compares them line by line. Then it prints the different lines from
+# the files with the format: [file1 - line number] [line content] and then the same for file2.
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <file1> <file2>"
+    exit 1
+fi
+file1="$1"
+file2="$2"
+if [ ! -f "$file1" ] || [ ! -f "$file2" ]; then
+    echo "Both arguments must be valid files."
+    exit 1
+fi
+echo "Comparing $file1 and $file2..."
+diff -u "$file1" "$file2" | grep -E '^\+|^-' | while read -r line; do
+    if [[ $line == -* ]]; then
+        line_number=$(grep -nFx "$line" "$file1" | cut -d: -f1)
+        echo "[$file1 - $line_number] ${line:1}"
+    elif [[ $line == +* ]]; then
+        line_number=$(grep -nFx "${line:1}" "$file2" | cut -d: -f1)
+        echo "[$file2 - $line_number] ${line:1}"
+    fi
+done
+exit 0
+# End of script
+# Usage example:
+# ./compare_files.sh file1.txt file2.txt

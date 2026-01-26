@@ -1,0 +1,382 @@
+#!/bin/bash
+# File Extractor Tool - Pure Bash Implementation
+# Extracts ALL files with a specific extension into ONE flat folder.
+# Works on Linux and macOS without external dependencies.
+
+set -o pipefail  # Exit on pipe failures
+
+# Color codes for output (optional, gracefully degrades)
+if [[ -t 1 ]]; then
+    GREEN='\033[0;32m'
+    RED='\033[0;31m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+else
+    GREEN=''
+    RED=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
+
+# Global counters
+SUCCESS_COUNT=0
+ERROR_COUNT=0
+MOVE_MODE=false
+declare -a ERRORS
+declare -a COPIED_FILES  # Track successfully copied files for move operation
+
+# Print usage information
+usage() {
+    cat << EOF
+Usage: $(basename "$0") <folder> <extension> [-r] [-m]
+
+Extract files with a specific extension into ONE flat folder.
+
+Arguments:
+    folder      Path to the source folder
+    extension   File extension to extract (e.g., pdf, .txt, jpg) - case insensitive
+    -r          (Optional) Search recursively through all subdirectories
+    -m          (Optional) Move files instead of copy (deletes originals after verification)
+
+Examples:
+    $(basename "$0") /path/to/folder pdf
+    $(basename "$0") /path/to/folder .jpg -r
+    $(basename "$0") ~/Documents txt -r -m
+    $(basename "$0") /path/to/folder PDF -m -r    # Matches .pdf, .PDF, .Pdf, etc.
+
+The tool creates a new folder in the parent directory of the source folder
+with the format: <source_folder_name>_extracted_<extension>
+
+ALL files are placed in ONE flat folder. Duplicate filenames are automatically
+renamed with counters (file_1.pdf, file_2.pdf, etc.) to prevent overwriting.
+
+File extensions are matched case-insensitively (.jpg matches .JPG, .Jpg, etc.)
+
+Safety features:
+    - Copies files first, then verifies before deletion (if -m is used)
+    - Handles duplicate filenames without overwriting
+    - Verifies file integrity after copying
+    - Deletes ONLY successfully verified files (failed files remain in source)
+
+EOF
+    exit 1
+}
+
+# Print error message and exit
+error_exit() {
+    echo "${RED}ERROR: $1${NC}" >&2
+    exit 1
+}
+
+# Get unique filename if file exists
+get_unique_filename() {
+    local dest_file="$1"
+    local base_dir=$(dirname "$dest_file")
+    local base_name=$(basename "$dest_file")
+    local filename="${base_name%.*}"
+    local extension="${base_name##*.}"
+    
+    # If no extension, handle differently
+    if [[ "$filename" == "$extension" ]]; then
+        extension=""
+    fi
+    
+    if [[ ! -e "$dest_file" ]]; then
+        echo "$dest_file"
+        return
+    fi
+    
+    # File exists, find unique name
+    local counter=1
+    while true; do
+        if [[ -n "$extension" && "$extension" != "$base_name" ]]; then
+            local new_name="${base_dir}/${filename}_${counter}.${extension}"
+        else
+            local new_name="${base_dir}/${base_name}_${counter}"
+        fi
+        
+        if [[ ! -e "$new_name" ]]; then
+            echo "$new_name"
+            return
+        fi
+        ((counter++))
+    done
+}
+
+# Safely copy a file with verification
+copy_file_safely() {
+    local source_file="$1"
+    local dest_file="$2"
+    local source_name=$(basename "$source_file")
+    
+    # Get unique filename if file exists
+    local unique_dest=$(get_unique_filename "$dest_file")
+    local renamed=false
+    if [[ "$unique_dest" != "$dest_file" ]]; then
+        renamed=true
+    fi
+    
+    # Copy file with permissions preserved
+    if ! cp -p "$source_file" "$unique_dest" 2>/dev/null; then
+        echo "${RED}✗ Failed to copy: ${source_name}${NC}"
+        ERRORS+=("Failed to copy: ${source_name}")
+        ((ERROR_COUNT++))
+        return 1
+    fi
+    
+    # Verify the copy (check if file exists and has content)
+    if [[ ! -f "$unique_dest" ]]; then
+        echo "${RED}✗ Verification failed: ${source_name}${NC}"
+        ERRORS+=("Verification failed: ${source_name}")
+        ((ERROR_COUNT++))
+        return 1
+    fi
+    
+    # Check file sizes match (if stat is available)
+    if command -v stat &> /dev/null; then
+        # Try Linux stat format first, fall back to macOS format
+        local source_size=$(stat -c%s "$source_file" 2>/dev/null || stat -f%z "$source_file" 2>/dev/null)
+        local dest_size=$(stat -c%s "$unique_dest" 2>/dev/null || stat -f%z "$unique_dest" 2>/dev/null)
+        
+        if [[ -n "$source_size" && -n "$dest_size" && "$source_size" != "$dest_size" ]]; then
+            rm -f "$unique_dest"
+            echo "${RED}✗ Size mismatch: ${source_name}${NC}"
+            ERRORS+=("Size mismatch: ${source_name}")
+            ((ERROR_COUNT++))
+            return 1
+        fi
+    fi
+    
+    # Additional verification: try to read the destination file
+    if ! cat "$unique_dest" > /dev/null 2>&1; then
+        rm -f "$unique_dest"
+        echo "${RED}✗ Cannot read copied file: ${source_name}${NC}"
+        ERRORS+=("Cannot read copied file: ${source_name}")
+        ((ERROR_COUNT++))
+        return 1
+    fi
+    
+    # Success - store the mapping for potential deletion
+    COPIED_FILES+=("${source_file}::${unique_dest}")
+    ((SUCCESS_COUNT++))
+    
+    if [[ "$renamed" == true ]]; then
+        local unique_name=$(basename "$unique_dest")
+        echo "${GREEN}✓ Copied (renamed to avoid duplicate): ${source_name} → ${unique_name}${NC}"
+    else
+        echo "${GREEN}✓ Copied: ${source_name}${NC}"
+    fi
+    
+    return 0
+}
+
+# Delete original files after verification (only in move mode)
+delete_original_files() {
+    if [[ "$MOVE_MODE" != "true" ]] || [[ ${#COPIED_FILES[@]} -eq 0 ]]; then
+        return 0
+    fi
+    
+    echo ""
+    echo "${BLUE}============================================================${NC}"
+    echo "${BLUE}MOVE MODE: Verifying copies and deleting originals...${NC}"
+    echo "${BLUE}============================================================${NC}"
+    echo ""
+    
+    local deleted_count=0
+    local verification_failed_count=0
+    local delete_error_count=0
+    
+    # Check each file individually and delete if verified
+    for entry in "${COPIED_FILES[@]}"; do
+        local source_file="${entry%%::*}"
+        local dest_file="${entry##*::}"
+        local source_name=$(basename "$source_file")
+        
+        # Verify destination file exists and is readable
+        if [[ ! -f "$dest_file" ]]; then
+            echo "${RED}✗ Destination missing, keeping original: ${source_name}${NC}"
+            ((verification_failed_count++))
+            continue
+        fi
+        
+        if ! cat "$dest_file" > /dev/null 2>&1; then
+            echo "${RED}✗ Destination not readable, keeping original: ${source_name}${NC}"
+            ((verification_failed_count++))
+            continue
+        fi
+        
+        # Verification passed - safe to delete original
+        if rm -f "$source_file" 2>/dev/null; then
+            echo "${GREEN}✓ Deleted original: ${source_name}${NC}"
+            ((deleted_count++))
+        else
+            echo "${RED}✗ Failed to delete original: ${source_name}${NC}"
+            ((delete_error_count++))
+        fi
+    done
+    
+    echo ""
+    echo "${BLUE}============================================================${NC}"
+    echo "${BLUE}DELETION SUMMARY${NC}"
+    echo "${BLUE}============================================================${NC}"
+    echo "Files successfully deleted: ${GREEN}${deleted_count}${NC}"
+    
+    if [[ $verification_failed_count -gt 0 ]]; then
+        echo "Files kept (verification failed): ${YELLOW}${verification_failed_count}${NC}"
+    fi
+    
+    if [[ $delete_error_count -gt 0 ]]; then
+        echo "Deletion errors: ${RED}${delete_error_count}${NC}"
+    fi
+    
+    echo ""
+}
+
+# Main extraction function
+extract_files() {
+    local source_folder="$1"
+    local file_extension="$2"
+    local recursive="$3"
+    
+    # Normalize extension (ensure it starts with a dot)
+    if [[ ! "$file_extension" =~ ^\. ]]; then
+        file_extension=".${file_extension}"
+    fi
+    
+    # Get absolute path of source folder
+    source_folder=$(cd "$source_folder" && pwd) || error_exit "Cannot access source folder: $source_folder"
+    
+    # Create destination folder name
+    local source_basename=$(basename "$source_folder")
+    local parent_dir=$(dirname "$source_folder")
+    local ext_clean=$(echo "$file_extension" | tr '.' '_')
+    local dest_folder="${parent_dir}/${source_basename}_extracted${ext_clean}"
+    
+    echo "Source folder: ${source_folder}"
+    echo "Destination folder: ${dest_folder}"
+    echo "File extension: ${file_extension} (case insensitive)"
+    echo "Recursive mode: $([ "$recursive" == "true" ] && echo "ON" || echo "OFF")"
+    echo "Move mode: $([ "$MOVE_MODE" == "true" ] && echo "${YELLOW}ON (will delete verified originals)${NC}" || echo "OFF (copy only)")"
+    echo "------------------------------------------------------------"
+    
+    # Create destination folder (flat structure - no subdirectories)
+    if ! mkdir -p "$dest_folder" 2>/dev/null; then
+        error_exit "Cannot create destination folder: $dest_folder"
+    fi
+    echo "Created destination folder: ${dest_folder}"
+    echo ""
+    
+    # Find files based on recursive flag - CASE INSENSITIVE
+    local find_cmd
+    if [[ "$recursive" == "true" ]]; then
+        find_cmd="find \"$source_folder\" -type f -iname \"*${file_extension}\""
+    else
+        find_cmd="find \"$source_folder\" -maxdepth 1 -type f -iname \"*${file_extension}\""
+    fi
+    
+    # Count files first
+    local file_count=$(eval $find_cmd 2>/dev/null | wc -l | tr -d ' ')
+    
+    if [[ "$file_count" -eq 0 ]]; then
+        echo "No files found with extension '${file_extension}'"
+        echo ""
+        print_summary "$dest_folder"
+        exit 0
+    fi
+    
+    echo "Found ${file_count} file(s) to extract"
+    echo ""
+    
+    # Process each file - ALWAYS flatten to one folder
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            # Extract only the filename (ignore path - flatten everything)
+            local filename=$(basename "$file")
+            local dest_file="${dest_folder}/${filename}"
+            
+            copy_file_safely "$file" "$dest_file"
+        fi
+    done < <(eval $find_cmd 2>/dev/null)
+    
+    # If move mode, delete originals after verification
+    delete_original_files
+    
+    print_summary "$dest_folder"
+}
+
+# Print summary
+print_summary() {
+    local dest_folder="$1"
+    
+    echo ""
+    echo "============================================================"
+    echo "EXTRACTION SUMMARY"
+    echo "============================================================"
+    echo "Total files processed: $((SUCCESS_COUNT + ERROR_COUNT))"
+    echo "Successfully extracted: ${GREEN}${SUCCESS_COUNT}${NC}"
+    echo "Errors: ${RED}${ERROR_COUNT}${NC}"
+    echo "Destination: ${dest_folder}"
+    
+    if [[ ${#ERRORS[@]} -gt 0 ]]; then
+        echo ""
+        echo "Errors encountered:"
+        for error in "${ERRORS[@]}"; do
+            echo "  - $error"
+        done
+    fi
+    
+    echo ""
+}
+
+# Parse arguments
+if [[ $# -lt 2 ]]; then
+    usage
+fi
+
+SOURCE_FOLDER="$1"
+EXTENSION="$2"
+RECURSIVE="false"
+
+# Check for flags (can be in any order)
+shift 2  # Remove first two arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r)
+            RECURSIVE="true"
+            shift
+            ;;
+        -m)
+            MOVE_MODE="true"
+            shift
+            ;;
+        *)
+            echo "${RED}Unknown option: $1${NC}" >&2
+            usage
+            ;;
+    esac
+done
+
+# Validate source folder
+if [[ ! -d "$SOURCE_FOLDER" ]]; then
+    error_exit "Source folder does not exist: $SOURCE_FOLDER"
+fi
+
+if [[ ! -r "$SOURCE_FOLDER" ]]; then
+    error_exit "Cannot read source folder: $SOURCE_FOLDER"
+fi
+
+# Handle interruption gracefully
+trap 'echo ""; echo "Operation cancelled by user."; exit 130' INT TERM
+
+# Run extraction
+extract_files "$SOURCE_FOLDER" "$EXTENSION" "$RECURSIVE"
+
+# Exit with appropriate code
+if [[ $ERROR_COUNT -gt 0 ]]; then
+    exit 1
+else
+    exit 0
+fi
+

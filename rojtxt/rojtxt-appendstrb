@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <string-to-append>"
+  exit 1
+fi
+
+find . -type f -name "*.md" -exec sh -c 'echo "$1" >> "$2"' _ "$1" {} \;

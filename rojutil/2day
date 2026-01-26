@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Ensure xclip is installed
+if ! command -v xclip &> /dev/null; then
+    echo "xclip is not installed. Installing it now..."
+    sudo apt update && sudo apt install -y xclip
+    if [ $? -ne 0 ]; then
+        echo "Failed to install xclip. Please install it manually."
+        exit 1
+    fi
+    echo "xclip installed successfully."
+fi
+
+# Get the current date in the desired format
+current_date=$(date '+%Y-%m-%d')
+
+# Copy the date to the clipboard
+echo -n "$current_date" | xclip -selection clipboard
+
+echo "Current date ($current_date) copied to clipboard."

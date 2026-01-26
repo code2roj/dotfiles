@@ -1,0 +1,14 @@
+#!/bin/bash
+
+
+# Read the JSON file and extract object keys
+sql_snippets="/home/roj/.config/Code/User/snippets/sql.json"
+
+# Ensure jq is installed
+if ! command -v jq &> /dev/null; then
+  echo "The jq utility is required but not installed. Please install it."
+  exit 1
+fi
+
+# Extract object names
+jq -r 'keys[]' "$sql_snippets"

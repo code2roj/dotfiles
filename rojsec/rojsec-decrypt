@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# rojsec-decrypt.sh
+# Decrypts a file encrypted by rojsec-encrypt.sh
+# Usage: rojsec-decrypt.sh <encrypted_file.enc>
+
+# --- Configuration ---
+DEFAULT_KEY_DIR="$HOME/.rojsec/rojsec-keys"
+KEY_DIR="" # Will be determined based on arguments
+
+# --- Argument Validation ---
+if [ -z "$1" ]; then
+    echo "Usage: $0 <encrypted_file.enc> [path_to_key_directory]"
+    echo "Example 1 (default key dir): $0 $HOME/.rojsec/rojsec-encrypted/myfile.enc"
+    echo "Example 2 (custom key dir):  $0 $HOME/.rojsec/rojsec-encrypted/myfile.enc /path/to/my/keys"
+    exit 1
+fi
+
+ENCRYPTED_FILE_ARG="$1"
+
+if [ ! -f "$ENCRYPTED_FILE_ARG" ]; then
+    echo "Error: Encrypted file not found: $ENCRYPTED_FILE_ARG"
+    exit 1
+fi
+
+if [[ "$ENCRYPTED_FILE_ARG" != *.enc ]]; then
+    echo "Error: Input file must have a .enc extension."
+    echo "Provided: $ENCRYPTED_FILE_ARG"
+    exit 1
+fi
+
+# --- Determine and Validate Key Directory ---
+if [ -n "$2" ]; then
+    # Second argument provided (custom key directory)
+    CUSTOM_KEY_DIR_ARG="$2"
+    if [ ! -d "$CUSTOM_KEY_DIR_ARG" ]; then
+        echo "Error: Custom key directory '$CUSTOM_KEY_DIR_ARG' not found."
+        echo "Please ensure the directory exists or omit the second argument to use the default."
+        exit 1
+    fi
+    KEY_DIR="$CUSTOM_KEY_DIR_ARG"
+    echo "Using custom key directory: $KEY_DIR"
+else
+    # No second argument, use default
+    KEY_DIR="$DEFAULT_KEY_DIR"
+    if [ ! -d "$KEY_DIR" ]; then
+        echo "Error: Default key directory '$KEY_DIR' not found."
+        echo "Please create it, or provide the path to your key directory as the second argument."
+        echo "Usage: $0 <encrypted_file.enc> [path_to_key_directory]"
+        exit 1
+    fi
+fi
+# --- Derive Key File Path ---
+ENCRYPTED_FILE_BASENAME=$(basename "$ENCRYPTED_FILE_ARG")
+KEY_NAME_BASE="${ENCRYPTED_FILE_BASENAME%.enc}" # This is the ENCRYPTION_NAME from the encryption script
+KEY_FILE_PATH="${KEY_DIR}/${KEY_NAME_BASE}.key"
+
+if [ ! -f "$KEY_FILE_PATH" ]; then
+    echo "Error: Encryption key not found: $KEY_FILE_PATH"
+    echo "Ensure the key file exists in '$KEY_DIR' and has the same base name as the encrypted file (minus .enc)."
+    exit 1
+fi
+
+# --- Derive Decrypted Output File Name ---
+# KEY_NAME_BASE is in the format: original_filename_or_zip_basename-TIMESTAMP-FILE_ID
+# Example: myfile.txt-2023-10-27-ABCDEFGH or myarchive.zip-2023-10-27-ABCDEFGH
+
+# Remove the -FILE_ID part (e.g., -ABCDEFGH)
+TEMP_NAME="${KEY_NAME_BASE%-*}"
+# Remove the -TIMESTAMP part (e.g., -2023-10-27)
+DECRYPTED_OUTPUT_BASENAME="${TEMP_NAME%-*}"
+
+if [ -z "$DECRYPTED_OUTPUT_BASENAME" ]; then
+    echo "Error: Could not determine original filename from '$KEY_NAME_BASE'."
+    echo "Encrypted file name format might be unexpected. Expected: name-YYYY-MM-DD-ID.enc"
+    exit 1
+fi
+
+DECRYPTED_FILE_PATH="./${DECRYPTED_OUTPUT_BASENAME}" # Output to current directory
+
+# --- Check for existing output file ---
+if [ -e "$DECRYPTED_FILE_PATH" ]; then
+    read -r -p "Output file '$DECRYPTED_FILE_PATH' already exists. Overwrite? (y/N): " confirm_overwrite
+    if [[ "$confirm_overwrite" != "y" && "$confirm_overwrite" != "Y" ]]; then
+        echo "Decryption aborted by user."
+        exit 0
+    fi
+fi
+
+# --- Decryption ---
+echo "Decrypting '$ENCRYPTED_FILE_ARG'..."
+echo "Using key: '$KEY_FILE_PATH'"
+echo "Outputting to: '$DECRYPTED_FILE_PATH'"
+
+openssl enc -d -aes-256-cbc -in "$ENCRYPTED_FILE_ARG" -out "$DECRYPTED_FILE_PATH" -pass file:"$KEY_FILE_PATH"
+
+if [ $? -eq 0 ]; then
+    echo "Decryption successful: $DECRYPTED_FILE_PATH"
+
+    # --- Optional: Unzip if it's a zip file ---
+    if [[ "$DECRYPTED_FILE_PATH" == *.zip ]]; then
+        read -r -p "Decrypted file is a zip archive. Unzip it? (y/N): " confirm_unzip
+        if [[ "$confirm_unzip" == "y" || "$confirm_unzip" == "Y" ]]; then
+            # Unzip to a directory named after the zip file (without .zip)
+            UNZIP_DEST_DIR="./${DECRYPTED_OUTPUT_BASENAME%.zip}"
+            mkdir -p "$UNZIP_DEST_DIR"
+            echo "Unzipping '$DECRYPTED_FILE_PATH' to '$UNZIP_DEST_DIR'..."
+            if unzip -q "$DECRYPTED_FILE_PATH" -d "$UNZIP_DEST_DIR"; then
+                echo "Unzipped successfully to '$UNZIP_DEST_DIR'."
+                read -r -p "Remove the decrypted zip file '$DECRYPTED_FILE_PATH'? (y/N): " confirm_remove_zip
+                if [[ "$confirm_remove_zip" == "y" || "$confirm_remove_zip" == "Y" ]]; then
+                    rm "$DECRYPTED_FILE_PATH"
+                    echo "Removed '$DECRYPTED_FILE_PATH'."
+                fi
+            else
+                echo "Error during unzipping. The zip file '$DECRYPTED_FILE_PATH' is preserved."
+            fi
+        fi
+    fi
+else
+    echo "Error: Decryption failed. This could be due to an incorrect key, corrupted file, or wrong decryption parameters."
+    # Clean up potentially empty/corrupted output file if decryption failed
+    # Only remove if the file was actually created by openssl (it might not be if input file is unreadable)
+    [ -f "$DECRYPTED_FILE_PATH" ] && rm "$DECRYPTED_FILE_PATH"
+    exit 1
+fi
+
+echo "Decryption process completed."

@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# --- Script Setup ---
+set -e # Exit immediately if a command exits with a non-zero status.
+
+echo "🚀 Starting Zsh, Oh My Zsh, Powerlevel10k, and plugin setup..."
+
+# --- Install Zsh, Git, Curl ---
+echo "📦 Updating package list and installing zsh, git, and curl..."
+sudo apt update
+sudo apt install -y zsh git curl
+
+# --- Set Zsh as default shell ---
+if [[ "$(basename "$SHELL")" != "zsh" ]]; then
+    echo "🐚 Setting Zsh as your default shell. You may be prompted for your password."
+    chsh -s "$(which zsh)"
+else
+    echo "✅ Zsh is already your default shell."
+fi
+
+# --- Install Oh My Zsh ---
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+    echo "✨ Installing Oh My Zsh..."
+    export RUNZSH=no # Prevent zsh from starting after installation
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+else
+    echo "✅ Oh My Zsh is already installed."
+fi
+
+# --- Install Powerlevel10k theme ---
+P10K_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k"
+if [ ! -d "$P10K_DIR" ]; then
+    echo "⚡ Installing Powerlevel10k theme..."
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR"
+else
+    echo "✅ Powerlevel10k is already installed."
+fi
+
+# --- Set theme in .zshrc ---
+echo "✏️ Setting Powerlevel10k as your Zsh theme..."
+sed -i 's|^ZSH_THEME=".*"|ZSH_THEME="powerlevel10k/powerlevel10k"|' "$HOME/.zshrc" || \
+    echo 'ZSH_THEME="powerlevel10k/powerlevel10k"' >> "$HOME/.zshrc"
+
+# --- Install plugins ---
+PLUGINS_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"
+
+# zsh-autosuggestions
+if [ ! -d "$PLUGINS_DIR/zsh-autosuggestions" ]; then
+    echo "➕ Installing zsh-autosuggestions plugin..."
+    git clone https://github.com/zsh-users/zsh-autosuggestions.git "$PLUGINS_DIR/zsh-autosuggestions"
+else
+    echo "✅ zsh-autosuggestions is already installed."
+fi
+
+# zsh-syntax-highlighting
+if [ ! -d "$PLUGINS_DIR/zsh-syntax-highlighting" ]; then
+    echo "➕ Installing zsh-syntax-highlighting plugin..."
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$PLUGINS_DIR/zsh-syntax-highlighting"
+else
+    echo "✅ zsh-syntax-highlighting is already installed."
+fi
+
+# --- Update plugins in .zshrc ---
+echo "🔌 Enabling plugins in .zshrc..."
+# Ensure 'plugins' line exists and update it, or add if missing
+if grep -q "^plugins=" "$HOME/.zshrc"; then
+    sed -i 's|^plugins=.*|plugins=(git zsh-autosuggestions zsh-syntax-highlighting)|' "$HOME/.zshrc"
+else
+    echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$HOME/.zshrc"
+fi
+
+# --- Source config (if not already sourced) ---
+if ! grep -q "source ~/.zshrc" "$HOME/.zshrc"; then
+    echo "🔄 Ensuring .zshrc is sourced."
+    echo "source ~/.zshrc" >> "$HOME/.zshrc"
+fi
+
+# --- Install Nerd Fonts (MesloLGS NF) ---
+FONT_DIR="$HOME/.local/share/fonts"
+FONT_ZIP="Meslo.zip"
+FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Meslo.zip" # Specific version for stability
+
+echo "✍️ Installing MesloLGS NF (Nerd Font)..."
+mkdir -p "$FONT_DIR"
+if [ ! -f "$FONT_DIR/MesloLGS NF Regular.ttf" ]; then # Check for a specific font file
+    wget -q --show-progress -O "$FONT_DIR/$FONT_ZIP" "$FONT_URL"
+    unzip -o "$FONT_DIR/$FONT_ZIP" -d "$FONT_DIR" # -o to overwrite existing files
+    rm "$FONT_DIR/$FONT_ZIP"
+    fc-cache -fv
+    echo "✅ Font installed and font cache refreshed."
+else
+    echo "✅ MesloLGS NF font appears to be already installed."
+fi
+
+# --- Final Instructions ---
+echo -e "\n🎉 Setup complete! Here are the next steps:"
+echo "1. **Restart your terminal** or run 'exec zsh' to apply changes."
+echo "2. **Set your terminal font** to 'MesloLGS NF' for Powerlevel10k to display correctly."
+echo "3. After restarting, run **'p10k configure'** to customize your Powerlevel10k theme."
+echo "Enjoy your enhanced Zsh experience! 🚀"

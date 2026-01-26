@@ -1,0 +1,10 @@
+#!/bin/bash
+
+TODAY=$(date +"%Y-%m-%d")
+sudo rkhunter --check --rwo > ~/.rojlog/rkhunter/rkhunter-check-$TODAY.log
+# if in the log file there is a warning, warning will be shown in the terminal
+if grep -q "Warning" ~/rkhunter/rkhunter-log-$TODAY.log; then
+    echo "Warning found in rkhunter-check-$TODAY.log. Please check the log file." 
+else
+    echo "No warning found in rkhunter-log-$TODAY.log"
+fi

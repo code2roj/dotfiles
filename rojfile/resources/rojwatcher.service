@@ -1,0 +1,13 @@
+[Unit]
+Description=Rojfile file management script
+After=network.target
+
+[Service]
+; The 'User' should be changed to the username on the target system.
+User=roj
+WorkingDirectory=/home/roj/
+ExecStart=/home/roj/myshell/rojfile/rojfile-venv/bin/python /home/roj/myshell/rojfile/rojfile-automate.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

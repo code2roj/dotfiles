@@ -1,0 +1,39 @@
+#!/bin/bash
+
+if [ "$#" -ne 2 ]; then
+  echo "Usage: $0 <markdown_file> <output_directory>"
+  exit 1
+fi
+
+input_file="$1"
+output_dir="$2"
+mkdir -p "$output_dir"
+
+output_file=""
+content=""
+counter=0
+
+sanitize_filename() {
+  echo "$1" | tr ' /:#*?' '_' | sed 's/[^a-zA-Z0-9._-]//g'
+}
+
+while IFS= read -r line; do
+  if [[ "$line" =~ ^##\  ]]; then
+    if [[ -n "$output_file" ]]; then
+      echo "$content" > "$output_file"
+    fi
+    heading="${line#\#\# }"
+    safe_heading=$(sanitize_filename "$heading")
+    output_file="$output_dir/$(printf "%02d" "$counter")_${safe_heading}.md"
+    content="$line"
+    ((counter++))
+  else
+    content+=$'\n'"$line"
+  fi
+done < "$input_file"
+
+if [[ -n "$output_file" ]]; then
+  echo "$content" > "$output_file"
+fi
+
+echo "Created $counter files in: $output_dir"

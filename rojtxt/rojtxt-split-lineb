@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Check if input file is provided
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <input_file>"
+  exit 1
+fi
+
+# Create the target directory if it doesn't exist
+mkdir -p splitted
+
+# Initialize line number counter
+line_number=1
+
+# Read the input file line by line
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Trim leading/trailing whitespace
+  trimmed_line=$(echo "$line" | xargs)
+
+  # Use the line number as the filename
+  file_name="line_${line_number}"
+
+  # Create a file with the line number as the file name and write the content to it
+  file_path="splitted/${file_name}.md"
+  echo "$trimmed_line" > "$file_path"
+  echo "Created: $file_path"
+
+  # Increment the line number counter
+  ((line_number++))
+done < "$1"

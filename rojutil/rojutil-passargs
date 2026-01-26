@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# Enable alias expansion
+shopt -s expand_aliases
+
+# Source your bashrc
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+
+# Script: passargs
+
+# Check if at least 2 arguments are provided
+if [ "$#" -lt 2 ]; then
+    echo "Usage: passargs <command> [-v var_positions] [-c const_pos const_value ...] args_file"
+    exit 1
+fi
+
+# Parse the command to run
+command="$1"
+shift
+
+# Initialize arrays to hold variable and constant positions and values
+var_positions=()
+const_positions=()
+const_values=()
+args_file=""
+
+# Function to display an error message and exit
+error_exit() {
+    echo "Error: $1"
+    exit 1
+}
+
+# Parse options
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -v)
+            shift
+            # Collect variable positions
+            while [[ "$#" -gt 0 && "$1" =~ ^[0-9]+$ ]]; do
+                var_positions+=("$1")
+                shift
+            done
+            ;;
+        -c)
+            shift
+            # Collect constant position-value pairs
+            while [[ "$#" -gt 1 && "$1" =~ ^[0-9]+$ ]]; do
+                const_positions+=("$1")
+                shift
+                const_values+=("$1")
+                shift
+            done
+            ;;
+        -*)
+            error_exit "Unknown option: $1"
+            ;;
+        *)
+            # Assume it's the args_file (should be the last argument)
+            if [[ -z "$args_file" ]]; then
+                args_file="$1"
+                shift
+            else
+                error_exit "Multiple args_file specified: $1"
+            fi
+            ;;
+    esac
+done
+
+# Check that args_file is specified
+if [[ -z "$args_file" ]]; then
+    error_exit "Missing args_file"
+fi
+
+# Check that args_file exists
+if [[ ! -f "$args_file" ]]; then
+    error_exit "args_file '$args_file' not found"
+fi
+
+# Ensure that positions are unique
+#all_positions=("${var_positions[@]}" "${const_positions[@]}")
+#unique_positions=($(printf "%s\n" "${all_positions[@]}" | sort -nu))
+#if [[ "${#all_positions[@]}" -ne "${#unique_positions[@]}" ]]; then
+#    error_exit "Duplicate argument positions specified in -v and -c"
+#fi
+
+# Main loop to process the args_file
+while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip empty lines and lines starting with #
+    line="${line%"${line##*[![:space:]]}"}"  # Trim trailing whitespace
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+
+    # Remove leading and trailing whitespace
+    line=$(echo "$line" | xargs)
+
+    # Parse the line into arguments, handling quotes and spaces
+    eval "set -- $line"
+    var_args=("$@")
+
+    # Check if we have enough variable arguments
+    if [[ "${#var_args[@]}" -lt "${#var_positions[@]}" ]]; then
+        error_exit "Not enough arguments in line: $line"
+    fi
+
+    # Initialize an array to hold all arguments
+    unset args
+    declare -a args
+
+    # Assign variable arguments to their positions
+    for idx in "${!var_positions[@]}"; do
+        pos="${var_positions[$idx]}"
+        # Subtract 1 to get zero-based index
+        args[$((pos - 1))]="${var_args[$idx]}"
+    done
+
+    # Assign constant arguments to their positions
+    for idx in "${!const_positions[@]}"; do
+        pos="${const_positions[$idx]}"
+        args[$((pos - 1))]="${const_values[$idx]}"
+    done
+
+    # Determine the number of arguments (maximum position)
+    max_pos=0
+    for pos in "${!args[@]}"; do
+        ((pos > max_pos)) && max_pos=$pos
+    done
+
+    # Build the final arguments array
+    declare -a final_args
+    for ((i = 0; i <= max_pos; i++)); do
+        # Handle unset arguments as empty strings
+        final_args[$i]="${args[$i]}"
+    done
+
+    # Print the command that will be executed
+    echo "Executing: $command ${final_args[*]}"
+
+    # Execute the command with the assembled arguments
+    "$command" "${final_args[@]}"
+
+done < "$args_file"

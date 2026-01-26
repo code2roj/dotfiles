@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# This script will read the file bash_requirements.txt
+# and install the required packages using apt.
+while IFS= read -r package; do
+    if [[ ! -z "$package" ]]; then
+        echo "Installing package: $package"
+        sudo apt-get install -y "$package"
+    fi
+done < bash_requirements.txt

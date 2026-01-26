@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# check if the correct number of arguments is provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <source_directory> <file_prefix>"
+    exit 1
+fi
+# Check if the source directory exists
+if [ ! -d "$1" ]; then
+    echo "Source directory $1 does not exist."
+    exit 1
+fi
+
+
+SOURCE_DIR=$1
+FILE_BEGINN=$2
+
+
+# Check if the destination directory exists, if not create it
+DEST_DIR="$SOURCE_DIR"/"$FILE_BEGINN" # Use a variable for clarity
+if [ ! -d "$DEST_DIR" ]; then
+    # Add error checking for mkdir
+    if mkdir "$DEST_DIR"; then
+        echo "Created directory: $DEST_DIR"
+    else
+        echo "Error: Could not create directory $DEST_DIR"
+        exit 1
+    fi
+fi
+
+# Initialize counter *before* the loop
+COUNTER=0
+
+# Move files with the specified prefix to the destination directory
+# Use quotes around the glob pattern for safety, though bash usually handles it
+# Consider using find for more robustness if filenames could be tricky
+shopt -s nullglob # Prevent loop running once if no files match
+FILES_TO_MOVE=("$SOURCE_DIR"/"$FILE_BEGINN"*.*)
+shopt -u nullglob # Turn nullglob off again
+
+
+# Check if the array is empty *before* looping
+if [ ${#FILES_TO_MOVE[@]} -eq 0 ]; then
+  echo "No files with prefix $FILE_BEGINN found in $SOURCE_DIR."
+  exit 0 # Exit cleanly, no files to move
+fi
+
+
+for file in "${FILES_TO_MOVE[@]}"; do
+    # Check if it's actually a file before moving (optional but safer)
+    if [ -f "$file" ]; then
+        # Use mv -v for verbose output instead of separate echo if desired
+        if mv "$file" "$DEST_DIR"/"${file##*/}"; then
+            echo "Moved file: ${file##*/} to $DEST_DIR"
+            COUNTER=$((COUNTER + 1))
+        else
+            echo "Error moving file: $file"
+            # Decide if you want to continue or exit on error
+        fi
+    fi
+done
+
+# Check the final count (this part was mostly okay, but now COUNTER is correct)
+# Note: The previous check using FILES_TO_MOVE handles the "no files" case better
+# This final echo is just for the success case.
+if [ "$COUNTER" -gt 0 ]; then
+    echo "Moved $COUNTER files with prefix $FILE_BEGINN to $DEST_DIR."
+# else
+    # This else is now redundant because of the check before the loop
+    # echo "No files with prefix $FILE_BEGINN found in $SOURCE_DIR."
+fi
+
+exit 0

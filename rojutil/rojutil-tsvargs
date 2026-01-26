@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Script: rojutil-runtsv.sh
+# Description: Runs a given command multiple times, with arguments for each run
+#              sourced from rows in a Tab-Separated Values (TSV) file.
+#
+# Usage: /home/roj/myshell/rojutil/rojutil-runtsv.sh <command_to_run> <tsv_file>
+#
+# Example:
+#   Let's say <command_to_run> is 'my_script' and <tsv_file> (e.g., /tmp/data.tsv) contains:
+#   arg1_val1	arg1_val2
+#   arg2_val1	arg2_val2	arg2_val3
+#
+#   The script will execute:
+#   my_script "arg1_val1" "arg1_val2"
+#   my_script "arg2_val1" "arg2_val2" "arg2_val3"
+
+# --- Argument Validation ---
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <command_to_run> <tsv_file>"
+    echo "Example: $0 process_data /path/to/input.tsv"
+    exit 1
+fi
+
+command_to_run="$1"
+tsv_file="$2"
+
+# --- File Validation ---
+if [ ! -f "$tsv_file" ]; then
+    echo "Error: TSV file '$tsv_file' not found."
+    exit 1
+elif [ ! -r "$tsv_file" ]; then
+    echo "Error: TSV file '$tsv_file' is not readable."
+    exit 1
+fi
+
+echo "--- Starting command execution from TSV: $tsv_file ---"
+
+# --- Main Processing Loop ---
+# Read the TSV file line by line.
+# IFS=$'\t' sets the Internal Field Separator to a tab.
+# read -r prevents backslash escapes from being interpreted.
+# read -a args_from_line reads the whitespace-separated fields into an array.
+# By not setting IFS here, 'read' uses the default IFS (space, tab, newline),
+# which handles splitting by one or more whitespace characters.
+while read -r -a args_from_line; do
+    # If a line in the TSV was completely empty, args_from_line will be an empty array. Skip it.
+    if [ "${#args_from_line[@]}" -eq 0 ]; then
+        continue
+    fi
+
+    # Build a string for display that quotes each argument individually
+    display_args_string=""
+    for arg in "${args_from_line[@]}"; do
+        # Append a space, then the argument enclosed in double quotes
+        display_args_string+=" \"$arg\""
+    done
+    # Remove the leading space (since args_from_line is guaranteed not to be empty here)
+    display_args_string="${display_args_string# }"
+
+    echo "Executing: $command_to_run $display_args_string"
+    "$command_to_run" "${args_from_line[@]}"
+
+    # Optional: You can add a check for the command's exit status here if needed
+    # local exit_status=$?
+    # if [ $exit_status -ne 0 ]; then
+    #     echo "Warning: Command exited with status $exit_status for arguments: $(IFS=$'\t'; echo "${args_from_line[*]}")"
+    # fi
+done < "$tsv_file"
+
+echo "--- Finished processing $tsv_file ---"

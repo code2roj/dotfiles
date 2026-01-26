@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# This script returns the list of top 20 largest files in the home directory
+# recursively, sorted by size in descending order.
+find ~ -type f -exec du -ah {} + | sort -rh | head -n 20

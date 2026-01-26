@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Usage: rojtxt-replace-regex <regex1> <regex2> <file>
+# Replaces all matches of regex1 with regex2 in the given file (like VSCode)
+
+if [ "$#" -ne 3 ]; then
+    echo "Usage: rojtxt-replace-regex <regex1> <regex2> <file>"
+    exit 1
+fi
+
+regex_find="$1"
+regex_replace="$2"
+file="$3"
+
+if [ ! -f "$file" ]; then
+    echo "File not found: $file"
+    exit 1
+fi
+
+perl -i -pe "s/$regex_find/$regex_replace/g" "$file"
+
+
+# check if the perl command was successful
+if [ $? -eq 0 ]; then
+    echo "Expression $1 was replaced with $2 in $3 successfully"
+else
+    echo "Failed to replace expression $1 with $2 in $3"
+    echo "Please check the regex syntax and try again."
+    echo "If you are using special characters, make sure to escape them properly."
+    echo "For example, to replace a dot (.) with a comma (,), use '\\.' and ',' respectively."
+    echo "If you are using slashes (/), you can use a different delimiter like '#' or '|' to avoid escaping."
+    echo "For example, to replace /path/to/file with /new/path/to/file, use 's#/path/to/file#/new/path/to/file#g'."
+    echo "If you are using backslashes (\), make sure to escape them properly."
+    echo "If you are using parentheses, make sure to escape them properly."
+    exit 1
+fi

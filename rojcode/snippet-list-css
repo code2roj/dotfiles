@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Check if the file path is provided
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 <path-to-json-file>"
+  exit 1
+fi
+
+# Read the JSON file and extract object keys
+css_snippets="/home/roj/.config/Code/User/snippets/css.json"
+
+# Ensure jq is installed
+if ! command -v jq &> /dev/null; then
+  echo "The jq utility is required but not installed. Please install it."
+  exit 1
+fi
+
+# Extract object names
+jq -r 'keys[]' "$css_snippets"

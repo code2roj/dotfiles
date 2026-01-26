@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Check if exactly 3 arguments are provided
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <directory_path> <string_to_replace> <replacement_string>"
+    exit 1
+fi
+
+# Assign arguments to variables
+directory="$1"
+string_to_replace="$2"
+replacement_string="$3"
+
+# Check if the given directory exists
+if [ ! -d "$directory" ]; then
+    echo "Error: Directory '$directory' does not exist."
+    exit 1
+fi
+
+# Iterate over all files in the directory
+for file in "$directory"/*; do
+    # Check if it's a file
+    if [ -f "$file" ]; then
+        # Get the directory and filename
+        dir_name=$(dirname "$file")
+        base_name=$(basename "$file")
+        
+        # Check if the filename contains the string to replace
+        if [[ "$base_name" == *"$string_to_replace"* ]]; then
+            # Replace the string in the filename
+            new_name="$dir_name/$(echo "$base_name" | sed "s/$string_to_replace/$replacement_string/g")"
+            
+            # Rename the file
+            mv "$file" "$new_name"
+        fi
+    fi
+done
+
+echo "String '$string_to_replace' replaced with '$replacement_string' in filenames in $directory."

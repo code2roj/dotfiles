@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Check if script is run with sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run with sudo"
+    exit 1
+fi
+
+# Check if ISO file is provided
+if [ -z "$1" ]; then
+    echo "Please provide the ISO file path"
+    echo "Usage: sudo $0 path/to/iso"
+    exit 1
+fi
+
+iso_path="$1"
+
+# List available USB devices
+echo "Available USB devices:"
+lsblk -d -o NAME,SIZE,TRAN | grep "usb"
+
+# Ask for USB device
+read -p "Enter the device name (e.g., sdb): " usb_device
+usb_path="/dev/$usb_device"
+
+if [ ! -b "$usb_path" ]; then
+    echo "Invalid device: $usb_path"
+    exit 1
+fi
+
+# Confirm with user
+read -p "Warning: All data on $usb_path will be erased. Continue? (y/N): " confirm
+if [ "$confirm" != "y" ]; then
+    echo "Operation cancelled"
+    exit 1
+fi
+
+# Unmount all partitions of the USB
+echo "Unmounting all partitions..."
+umount "$usb_path"* 2>/dev/null
+
+# Format the USB (optional, sometimes not necessary for ISO writing)
+echo "Formatting USB device..."
+mkfs.fat -F 32 "$usb_path"
+
+# Write ISO to USB
+echo "Writing ISO to USB..."
+dd if="$iso_path" of="$usb_path" bs=4M status=progress && sync
+
+echo "Done! USB device is ready."

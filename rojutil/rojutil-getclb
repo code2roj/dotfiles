@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Check if an optional argument is provided for CLIPBOARD_CONTENT file
+if [ "$#" -gt 1 ]; then
+  echo "Usage: $0 [CLIPBOARD_CONTENT-file]"
+  exit 1
+fi
+
+CLIPBOARD_CONTENT="$1"
+
+get_from_clipboard() {
+    if [ -n "$1" ]; then
+        # Write the clipboard content to the specified file
+        xclip -selection clipboard -o > "$1"
+    else
+        # output the clipboard content to stdout
+        xclip -selection clipboard -o
+    fi
+}
+
+get_from_clipboard "$CLIPBOARD_CONTENT"
+
+echo "Content retrieved from clipboard"

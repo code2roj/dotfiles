@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Check if argument is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <file-path or string-content>"
+  exit 1
+fi
+
+content="$1"
+
+copy_to_clipboard() {
+    if [ -f "$1" ] && [ -r "$1" ]; then
+        # Copy the file content to clipboard
+        xclip -selection clipboard -i "$1"
+    else
+        # Use echo with -n and pipe to xclip with -i
+        echo -n "$1" | xclip -selection clipboard -i
+    fi
+}
+
+copy_to_clipboard "$content"
+
+echo "Content added to clipboard"
+

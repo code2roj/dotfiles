@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Check if the user has provided the input directory
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <input_directory>"
+    exit 1
+fi
+
+# Create a directory in the source directory to store the WebP files
+mkdir -p "$1/webp"
+
+# Initialize counter
+count=0
+
+# Loop through all the PNG files in the input directory and convert them to WebP format
+for file in "$1"/*.png; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file")
+        output_file="$1/webp/${filename%.*}.webp"
+        cwebp -q 80 "$file" -o "$output_file"
+        ((count++))  # Increment counter
+    fi
+done
+
+echo "Conversion completed successfully. $count images were converted."  

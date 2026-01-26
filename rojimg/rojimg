@@ -1,0 +1,201 @@
+#!/bin/bash
+
+banner=$(cat << 'EOF'
+
+rojimg - a tool for automating repititive image processing tasks
+Author Code2Roj
+Published under MIT License
+2025
+Link to the repository:
+github.com/code2roj/rojimg                             
+_________.____________________________________________________
+__  ____/_  __ \__  __ \__  ____/_|__ \__  __ \_  __ \_____  /
+_  /    _  / / /_  / / /_  __/  ____/ /_  /_/ /  / / /__ _  / 
+/ /___  / /_/ /_  /_/ /_  /___  _  __/_  _, _// /_/ // /_/ /  
+\____/  \____/ /_____/ /_____/  /____//_/ |_| \____/ \____/   
+_____________________________
+__|__ \_  __ \_|__ \__  ____/
+____/ /  / / /___/ /_____ \  
+_  __// /_/ /_  __/ ____/ /  
+/____/\____/ /____//_____/   
+
+EOF
+)
+
+usage_message() {
+    echo "$banner"
+    echo "Usage: rojimg [in|out|log|j] [activity description or number of lines if log option]"
+    cat << EOF
+
+    Options:
+    watermark
+    : End the current activity. The activity description should be provided as the second argument.
+    log: Display the last n lines of the log file. If the number of lines is not provided, the entire log file is displayed.
+    edit: Open the log file in the nano text editor.
+    j: Add a new journal entry. The journal entry description should be provided as the second argument.
+
+EOF
+}
+
+
+
+#---------------------------------------------------------
+# Function to add watermark to an image
+# Usage: add_watermark input_image watermark_image
+# Example: add_watermark input.jpg watermark.png
+
+
+add_watermark() {
+    local input_image="$1"
+    local watermark="$2"
+    local output_image="$3"
+
+    if [ -z "$input_image" ] || [ -z "$watermark" ]; then
+        echo "Usage: add_watermark input_image watermark_image"
+        return 1
+    fi
+
+    if [ ! -f "$input_image" ] || [ ! -f "$watermark" ]; then
+        echo "Error: Input file or watermark file not found"
+        return 1
+    fi
+
+    ffmpeg -i "$input_image" -i "$watermark" -filter_complex "[1:v]scale=iw/16:ih/16[wm];[0:v][wm]overlay=10:10" "${output_image}"
+
+    if [ $? -eq 0 ]; then
+        echo "Watermark added successfully. Output saved as: $output_image"
+    else
+        echo "Error: Failed to add watermark"
+        return 1
+    fi
+}
+
+#----------------------------------------------------------------
+
+add_title() {
+    local input_image="$1"
+    local title="$2"
+    local output_image="$3"
+
+    if [ -z "$input_image" ] || [ -z "$title" ]; then
+        echo "Usage: add_title input_image title"
+        return 1
+    fi
+
+    if [ ! -f "$input_image" ]; then
+        echo "Error: Input file not found"
+        return 1
+    fi
+
+    # Calculate dynamic font size as 1/8th of the image height
+    image_height=$(identify -format "%h" "$input_image")
+    dynamic_font_size=$(( image_height / 5 ))
+
+    convert "$input_image" -gravity "$gravity" -font "$font" -pointsize "$dynamic_font_size" -fill "$font_color" \
+        -annotate +${x_offset}+${y_offset} "$title" "${output_image}"
+
+    if [ $? -eq 0 ]; then
+        echo "Title added successfully. Output saved as: $output_image"
+    else
+        echo "Error: Failed to add title"
+        return 1
+    fi
+}
+
+#-----------------------------------------------------------------
+
+overlay_image() {
+    local input_image="$1"
+    local overlay_image="$2"
+    local output_image="$3"
+
+    if [ -z "$input_image" ] || [ -z "$overlay_image" ]; then
+        echo "Usage: overlay_image <input_image> <transparent overlay>"
+        return 1
+    fi
+
+    if [ ! -f "$input_image" ] || [ ! -f "$overlay_image" ]; then
+        echo "Error: Input file or overlay file not found"
+        return 1
+    fi
+
+    # Check if the overlay image and the base image are of the same size
+    input_width=$(identify -format "%w" "$input_image")
+    input_height=$(identify -format "%h" "$input_image")
+    overlay_width=$(identify -format "%w" "$overlay_image")
+    overlay_height=$(identify -format "%h" "$overlay_image")
+    if [ "$input_width" -ne "$overlay_width" ] || [ "$input_height" -ne "$overlay_height" ]; then
+        echo "Warning: The overlay image size does not match the input image size. Resizing overlay image."
+        overlay_image_resized="${overlay_image%.*}_resized.${overlay_image##*.}"
+        convert "$overlay_image" -resize "${input_width}x${input_height}!" "$overlay_image_resized"
+        overlay_image="$overlay_image_resized"
+    fi
+    # Check if the overlay image is a PNG with transparency
+    overlay_format=$(identify -format "%m" "$overlay_image")
+    if [ "$overlay_format" != "PNG" ]; then
+        echo "Warning: The overlay image is not a PNG. Converting to PNG."
+        overlay_image_converted="${overlay_image%.*}.png"
+        convert "$overlay_image" "$overlay_image_converted"
+        overlay_image="$overlay_image_converted"
+    fi
+
+    # Merge the images using ImageMagick
+    convert "$input_image" "$overlay_image" -gravity center -composite "${output_image}"
+
+    if [ $? -eq 0 ]; then
+        echo "Images merged successfully. Output saved as: $output_image"
+    else
+        echo "Error: Failed to merge images"
+        return 1
+    fi
+}
+
+#-------------------------------------------------------------------------
+
+png_to_webp(){
+    # Check if the user has provided the input directory
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: $0 <input_directory>"
+        exit 1
+    fi
+    
+    local input_directory=$1
+    # Create a directory in the source directory to store the WebP files
+    mkdir -p "$1/webp"
+
+    # Initialize counter
+    count=0
+
+    # Loop through all the PNG files in the input directory and convert them to WebP format
+    for file in "$1"/*.png; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            output_file="$1/webp/${filename%.*}.webp"
+            cwebp -q 80 "$file" -o "$output_file"
+            ((count++))  # Increment counter
+        fi
+    done
+
+    echo "Conversion completed successfully. $count images were converted."  
+}
+#---------------------------------------------------------------------------
+
+# Main: call the appropriate function based on the first argument
+case "$1" in
+    watermark)
+        add_watermark "$2"
+        ;;
+    title)
+        rojimg_out "$2"
+        ;;
+    overlay)
+        overlay_image "$2" "$3"
+        ;;
+    pngtowebp)
+        png_to_webp "$2"
+        ;;
+    *)
+        usage_message
+        exit 1
+        ;;
+esac

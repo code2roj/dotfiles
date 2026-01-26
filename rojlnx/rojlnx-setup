@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# Abbrechen bei Fehlern
+set -e
+
+# Dynamischer Pfad zum Skript-Ordner (wichtig für die Paketlisten)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "Starting rojlnx setup..."
+
+# 1. Update system packages
+if command -v apt &> /dev/null; then
+    echo "Updating system packages using apt..."
+    sudo apt update && sudo apt upgrade -y
+elif command -v apk &> /dev/null; then
+    echo "Updating system packages using apk..."
+    sudo apk update && sudo apk upgrade
+elif command -v brew &> /dev/null; then
+    echo "Updating system packages using brew..."
+    brew update && brew upgrade
+fi
+
+# 2. Rename the hostname
+read -p "Do you want to rename the hostname? (y/n): " rename_choice
+if [[ "$rename_choice" =~ ^[Yy]$ ]]; then
+    read -p "Enter the new hostname: " new_hostname
+    sudo hostnamectl set-hostname "$new_hostname"
+    # Update /etc/hosts to prevent sudo lag
+    sudo sed -i "s/127.0.1.1.*/127.0.1.1 $new_hostname/" /etc/hosts
+    echo "Hostname renamed to '$new_hostname'."
+fi
+
+# 3. Create default user
+DEFAULT_USER="roj"
+if ! id -u "$DEFAULT_USER" &> /dev/null; then
+    echo "Creating user '$DEFAULT_USER'..."
+    sudo useradd -m -s /bin/bash "$DEFAULT_USER"
+    echo "Please set a password for '$DEFAULT_USER':"
+    sudo passwd "$DEFAULT_USER"
+fi
+
+# 4. Permissions (Sudo/Wheel)
+if command -v apt &> /dev/null; then
+    sudo usermod -aG sudo "$DEFAULT_USER"
+else
+    # Für Alpine/Arch/etc.
+    sudo groupadd -f wheel
+    sudo usermod -aG wheel "$DEFAULT_USER"
+fi
+
+# 5. SSH Keys
+echo "Setting up SSH keys..."
+if [ -f /root/.ssh/authorized_keys ]; then
+    USER_SSH_DIR="/home/$DEFAULT_USER/.ssh"
+    sudo mkdir -p "$USER_SSH_DIR"
+    sudo cp /root/.ssh/authorized_keys "$USER_SSH_DIR/"
+    sudo chown -R "$DEFAULT_USER:$DEFAULT_USER" "$USER_SSH_DIR"
+    sudo chmod 700 "$USER_SSH_DIR"
+    sudo chmod 600 "$USER_SSH_DIR/authorized_keys"
+fi
+
+# 6. GitHub CLI & Repo setup
+GH_TOKEN_FILE="/home/$DEFAULT_USER/.gh-token"
+if [ -f "$GH_TOKEN_FILE" ]; then
+    echo "Installing & Authenticating GitHub CLI..."
+    # Install gh
+    if command -v apt &> /dev/null; then sudo apt install -y gh
+    elif command -v apk &> /dev/null; then sudo apk add gh
+    fi
+
+    # Berechtigung für Token-Datei sicherstellen
+    sudo chown "$DEFAULT_USER:$DEFAULT_USER" "$GH_TOKEN_FILE"
+    
+    # Auth & Clone als User roj
+    GH_TOKEN=$(sudo -u "$DEFAULT_USER" cat "$GH_TOKEN_FILE")
+    echo "$GH_TOKEN" | sudo -u "$DEFAULT_USER" gh auth login --with-token
+    sudo -u "$DEFAULT_USER" gh repo clone rojlnx/myshell "/home/$DEFAULT_USER/myshell" || echo "Repo already exists."
+fi
+
+# 7. Package Installation (Optimized)
+essential_packages_default="$SCRIPT_DIR/package-lists/rojlnx-packages-dev.txt"
+essential_packages_dev="$SCRIPT_DIR/package-lists/essential-packages-dev.txt"
+
+read -p "Which package list? (1) Essential (2) Minimal [1/2]: " package_choice
+package_choice=${package_choice:-1}  # default to 1 if empty
+
+case "$package_choice" in
+    1) PACKAGE_LIST="$essential_packages_default" ;;
+    2) PACKAGE_LIST="$essential_packages_dev" ;;
+    *) PACKAGE_LIST="" ;; # invalid choice
+esac
+
+# Loop until a valid file is provided
+while [ ! -f "$PACKAGE_LIST" ]; do
+    echo "Package list not found: $PACKAGE_LIST"
+    read -p "Please provide the package list path: " PACKAGE_LIST
+done
+
+# Load package list
+source "$PACKAGE_LIST"
+
+echo "Installing packages..."
+if command -v apt &> /dev/null; then
+    sudo apt install -y "${PKGS[@]}"
+elif command -v apk &> /dev/null; then
+    sudo apk add "${PKGS[@]}"
+fi
+
+
+
+echo "Rojlnx initial setup completed."

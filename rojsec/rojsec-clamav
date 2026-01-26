@@ -1,0 +1,27 @@
+#!/bin/bash
+
+
+
+# Checks if the directory has been provided as an argument
+
+
+if [ $# -ne 1 ]; then
+    sudo clamscan -r / --log="$LOGFILE" 2>&1
+    exit 0
+else
+    DIR_TO_SCAN=$1
+fi
+
+sudo freshclam "$DIR_TO_SCAN"
+if [ ! -d "/home/roj/.rojlog/rojsec/clamav" ]; then
+    sudo mkdir -p /home/roj/.rojlog/rojsec/clamav
+    sudo chown -R roj:roj /home/roj/.rojlog/rojsec/clamav
+fi
+LOGFILE="/home/roj/.rojlog/rojsec/clamav/clamscan-$(date +"%Y-%m-%d").log"
+sudo clamscan -r / --log="$LOGFILE" 2>&1
+
+if grep -q "Infected files: 0" "$LOGFILE"; then
+    echo "No infected files found"
+else
+    echo "Warning: Infected files found"
+fi

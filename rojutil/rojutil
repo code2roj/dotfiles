@@ -1,0 +1,14 @@
+#!/bin/bash
+
+echo "available commands:
+
+"
+for file in ~/myshell/rojutil/*; do
+    if [ -f "$file" ] && [[ ! "$file" =~ \.(txt|md|csv)$ ]]; then
+        echo "$(basename "$file")"
+    fi
+done | sort
+
+echo "			"
+
+echo "			"

@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Parse options
+RECURSIVE=0
+while getopts ":r" opt; do
+    case $opt in
+        r)
+            RECURSIVE=1
+            ;;
+        \?)
+            echo "Usage: $0 [-r] <source_directory> <string_in_name>"
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# check if the correct number of arguments is provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 [-r] <source_directory> <string_in_name>"
+    exit 1
+fi
+
+# Check if the source directory exists
+if [ ! -d "$1" ]; then
+    echo "Source directory $1 does not exist."
+    exit 1
+fi
+
+SOURCE_DIR=$1
+STRING_IN_NAME=$2
+
+# Destination directory (same parent as source, with suffix)
+DEST_DIR="${SOURCE_DIR%/}-${STRING_IN_NAME}"
+
+# Check if the destination directory exists, if not create it
+if [ ! -d "$DEST_DIR" ]; then
+    # Add error checking for mkdir
+    if mkdir -p "$DEST_DIR"; then
+        echo "Created directory: $DEST_DIR"
+    else
+        echo "Error: Could not create directory $DEST_DIR"
+        exit 1
+    fi
+fi
+
+# Initialize counter *before* the loop
+COUNTER=0
+
+# Move files with the specified string in name to the destination directory
+shopt -s nullglob
+
+if [ $RECURSIVE -eq 1 ]; then
+    # Use find for recursive search (portable across Linux and macOS)
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            filename="${file##*/}"
+            base="${filename%.*}"
+            ext="${filename##*.}"
+            
+            dest_file="$DEST_DIR/${base}_${COUNTER}.${ext}"
+            
+            if mv "$file" "$dest_file"; then
+                echo "Moved file: ${dest_file##*/} to $DEST_DIR"
+                COUNTER=$((COUNTER + 1))
+            else
+                echo "Error moving file: $file"
+            fi
+        fi
+    done < <(find "$SOURCE_DIR" -type f -name "*$STRING_IN_NAME*")
+else
+    FILES_TO_MOVE=("$SOURCE_DIR"/*"$STRING_IN_NAME"*)
+    
+    # Check if the array is empty *before* looping
+    if [ ${#FILES_TO_MOVE[@]} -eq 0 ]; then
+      echo "No files with '$STRING_IN_NAME' in name found in $SOURCE_DIR."
+      shopt -u nullglob
+      exit 0
+    fi
+    
+    for file in "${FILES_TO_MOVE[@]}"; do
+        # Check if it's actually a file before moving (optional but safer)
+        if [ -f "$file" ]; then
+            filename="${file##*/}"
+            base="${filename%.*}"
+            ext="${filename##*.}"
+            
+            dest_file="$DEST_DIR/${base}_${COUNTER}.${ext}"
+            
+            if mv "$file" "$dest_file"; then
+                echo "Moved file: ${dest_file##*/} to $DEST_DIR"
+                COUNTER=$((COUNTER + 1))
+            else
+                echo "Error moving file: $file"
+            fi
+        fi
+    done
+fi
+
+shopt -u nullglob
+
+if [ "$COUNTER" -gt 0 ]; then
+    echo "Moved $COUNTER files containing '$STRING_IN_NAME' in their name to $DEST_DIR."
+fi
+
+exit 0

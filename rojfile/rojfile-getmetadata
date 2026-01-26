@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Check if at least one argument is provided
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: $0 <directory_path> [output_file]"
+    exit 1
+fi
+
+# Store the directory path
+DIRECTORY_PATH="$1"
+
+# Check if the provided argument is a valid directory
+if [ ! -d "$DIRECTORY_PATH" ]; then
+    echo "Error: $DIRECTORY_PATH is not a valid directory."
+    exit 1
+fi
+
+# Set output file name based on arguments
+if [ "$#" -eq 2 ]; then
+    OUTPUT_FILE="${DIRECTORY_PATH}/metadata-$(date +%Y-%m-%d)-$2.json"
+else
+    OUTPUT_FILE="${DIRECTORY_PATH}/metadata-$(date +%Y-%m-%d).json"
+fi
+
+# Start JSON array
+echo "[" > "$OUTPUT_FILE"
+first_file=true
+
+# Iterate through all files in the directory
+for FILE in "$DIRECTORY_PATH"/*; do
+    if [ -f "$FILE" ]; then
+        # Add comma between objects except for the first one
+        if [ "$first_file" = true ]; then
+            first_file=false
+        else
+            echo "," >> "$OUTPUT_FILE"
+        fi
+        
+        echo "  {" >> "$OUTPUT_FILE"
+        echo "    \"FileName\": \"$(basename "$FILE")\"," >> "$OUTPUT_FILE"
+        
+        # Process exiftool output into JSON format
+        exiftool "$FILE" | while IFS=: read -r key value; do
+            # Trim whitespace and escape quotes
+            key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/"/\\"/g')
+            echo "    \"$key\": \"$value\"," >> "$OUTPUT_FILE"
+        done
+        
+        # Remove trailing comma from last property
+        sed -i '$ s/,$//' "$OUTPUT_FILE"
+        echo "  }" >> "$OUTPUT_FILE"
+    fi
+done
+
+# Close JSON array
+echo "]" >> "$OUTPUT_FILE"
+
+echo "Metadata extraction complete. Check $OUTPUT_FILE"

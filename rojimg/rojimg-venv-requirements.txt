@@ -1,0 +1,3 @@
+rembg[cli]
+pillow
+onnxruntime

@@ -1,0 +1,27 @@
+#!/bin/bash
+if ! command -v fdupes &>/dev/null; then
+    echo "Error: fdupes is not installed. Install with: sudo apt install fdupes"
+    exit 1
+fi
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <directory>"
+    exit 1
+fi
+
+dir="$1"
+if [[ ! -d "$dir" ]]; then
+    echo "Error: Directory '$dir' does not exist"
+    exit 1
+fi
+
+echo -e "\nPreview of duplicates (sizes shown):"
+fdupes -rS "$dir"
+
+echo -e "\nProceed to interactive deletion? [y/N]"
+read -r confirm
+if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    fdupes -rS -d "$dir"
+else
+    echo "Aborted."
+fi

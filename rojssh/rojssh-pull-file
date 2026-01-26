@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# The script uses reverse SCP to pull a file from a remote server to the local machine.
+# Usage: rojssh-pull-file.sh <remote_user> <remote_host> <remote_file_path> <local_destination_path>
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <remote_user> <remote_host> <remote_file_path> <local_destination_path>"
+    exit 1
+fi
+
+REMOTE_USER="$1"
+REMOTE_HOST="$2"
+REMOTE_FILE_PATH="$3"
+LOCAL_DESTINATION_PATH="$4"
+
+# Perform the SCP operation
+scp "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_FILE_PATH}" "${LOCAL_DESTINATION_PATH}"
+if [ $? -eq 0 ]; then
+    echo "File successfully pulled from ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_FILE_PATH} to ${LOCAL_DESTINATION_PATH}"
+else
+    echo "Error: Failed to pull file from ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_FILE_PATH}"
+    exit 1
+fi

@@ -1,0 +1,136 @@
+#!/bin/python3
+
+import os
+import re
+import argparse
+
+def replace_in_file(regex_pattern, replacement, file_path):
+    pattern = re.compile(regex_pattern)
+    with open(file_path, "r", encoding="utf-8") as file:
+        content = file.read()
+    new_content = pattern.sub(replacement, content)
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(new_content)
+
+def replace_in_dir(regex_pattern, replacement, dir_path):
+    pattern = re.compile(regex_pattern)
+    for root, dirs, files in os.walk(dir_path):
+        for filename in files:
+            if filename.endswith(".txt"):
+                file_path = os.path.join(root, filename)
+                with open(file_path, "r", encoding="utf-8") as file:
+                    content = file.read()
+                new_content = pattern.sub(replacement, content)
+                with open(file_path, "w", encoding="utf-8") as file:
+                    file.write(new_content)
+
+def find_expression_pattern(dir_path, search_string):
+    if not os.path.isdir(dir_path):
+        print(f"Error: Directory '{dir_path}' does not exist.")
+        return
+
+    search_results = []
+    # Use os.walk to recursively search through the directory
+    for root, dirs, files in os.walk(dir_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            # Ignore binary files
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for line_number, line in enumerate(f, start=1):
+                        if re.search(search_string, line):
+                            search_results.append((file_path, line_number, line.strip()))
+            except (UnicodeDecodeError, FileNotFoundError):
+                continue
+
+    if not search_results:
+        print(f"No file containing the provided string was found in the {dir_path}")
+        return
+
+    # Print the table header
+    print(f"| {'file':<24} | {'line number':<11} | {'line content':<75} |")
+    print(f"| {'-'*24} | {'-'*11} | {'-'*75} |")
+
+    # Iterate over each matching line and format the output
+    for file_path, line_number, line_content in search_results:
+        print(f"| {file_path:<24} | {line_number:<11} | {line_content:<75} |")
+
+def main():
+    parser = argparse.ArgumentParser(description="Replace text in a file or directory.")
+    parser.add_argument("regex_pattern", help="The regex pattern to search for.", nargs='?')
+    parser.add_argument("path", help="Path to the file or directory.", nargs='?')
+    parser.add_argument("replacement", help="The replacement text.", nargs='?')
+
+    parser.add_argument("-d", "--directory", help="Replace text in all text files in the directory.", action="store_true")
+    parser.add_argument("-f", "--find", help="Find expression pattern in the directory.", action="store_true")
+    parser.add_argument("-j", "--json", help="Use JSON file for regex pattern and replacement.", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.json:
+        if args.regex_pattern and os.path.isfile(args.regex_pattern):
+            json_file_path = args.regex_pattern
+            import json
+            try:
+                with open(json_file_path, 'r', encoding='utf-8') as json_file:
+                    data = json.load(json_file)
+                if 'arguments' in data and isinstance(data['arguments'], list):
+                    target_path = args.path
+                    if not target_path:
+                        print("Error: Target path (file or directory) not specified.")
+                        return
+                    for arg_pair in data['arguments']:
+                        if 'regex_pattern' in arg_pair and 'replacement' in arg_pair:
+                            regex_pattern = arg_pair['regex_pattern']
+                            replacement = arg_pair['replacement']
+                            if args.find and os.path.isdir(target_path):
+                                find_expression_pattern(target_path, regex_pattern)
+                            elif args.directory and os.path.isdir(target_path):
+                                replace_in_dir(regex_pattern, replacement, target_path)
+                            elif os.path.isfile(target_path):
+                                replace_in_file(regex_pattern, replacement, target_path)
+                            else:
+                                print(f"Error: Target path '{target_path}' does not exist.")
+                        else:
+                            print("Invalid argument pair in JSON file. Each argument must have 'regex_pattern' and 'replacement'.")
+                else:
+                    print("Invalid JSON structure. JSON must contain key 'arguments' with list of argument pairs.")
+            except Exception as e:
+                print(f"Error reading JSON file: {e}")
+        else:
+            print("Error: Path to JSON file is missing or invalid.")
+
+    elif args.find:
+        if args.regex_pattern and args.path:
+            find_expression_pattern(args.path, args.regex_pattern)
+        else:
+            print(f"""Invalid Arguments for -f option.
+                      Usage: rojreg -f <regex_pattern> <path> """)
+    elif args.directory:
+        if args.regex_pattern and args.replacement and args.path and os.path.isdir(args.path):
+            replace_in_dir(args.regex_pattern, args.replacement, args.path)
+        else:
+            print(f"""Invalid Arguments for -d option. 
+                      Usage: rojreg -d <regex_pattern> <replacement> <path> """)
+    else:
+        if args.regex_pattern and args.replacement and args.path and os.path.isfile(args.path):
+            replace_in_file(args.regex_pattern, args.replacement, args.path)
+        else:
+            print(f"""
+
+Usage: rojreg [-d -f -j] <regex_pattern> <path> [replacement]
+
+---+--------------+---------------------------------------------|
+-d | --directory | finds and replaces the expression in all of  |
+   |             | the text files in the provided directory.    |
+---+-------------+----------------------------------------------|
+-f | --find      | finds the expression and returns their file  |
+                 | and line number                              |
+---+-------------+----------------------------------------------|
+-j | --json      | uses json file for taking the regex pattern  |
+   |             | and replacement arguments                    |
+---+-------------+----------------------------------------------|
+""")
+
+if __name__ == "__main__":
+    main()

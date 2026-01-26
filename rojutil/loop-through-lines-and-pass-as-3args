@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Check if three arguments are provided
+if [ $# -ne 3 ]; then
+    echo "usage: passargs-3 <command> <args_file> <output_file>"
+    exit 1
+fi
+
+command=$1
+args_file=$2
+output_file=$3
+
+# Loop through each line in the args_file
+while IFS=',' read -r arg1 arg2 arg3; do
+    # Run the command with arguments and append the result to the output file
+    "$command" "$arg1" "$arg2" "$arg3" >> "$output_file"
+done < "$args_file"

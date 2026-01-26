@@ -1,0 +1,15 @@
+{
+    "arguments": [
+        {
+            "c": "",
+            "replacement": ""
+        },{
+            "regex_pattern": "",
+            "replacement": " "
+        },{
+            "regex_pattern": "",
+            "replacement": ""
+        }
+
+    ]
+}

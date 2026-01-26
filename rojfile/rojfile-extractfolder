@@ -1,0 +1,85 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <source_directory>"
+    exit 1
+fi
+
+src_dir_arg="$1"
+
+if [ ! -d "$src_dir_arg" ]; then
+    echo "Error: Source directory '$src_dir_arg' not found."
+    exit 1
+fi
+
+# Use the original argument for creating the target directory name and path
+# This keeps the target directory location relative to the input argument if it was relative
+base=$(basename "$src_dir_arg")
+parent=$(dirname "$src_dir_arg")
+trgt_dir="$parent/${base}-extracted"
+mkdir -p "$trgt_dir"
+
+# Get the canonical, absolute path for the source directory for internal processing
+# This helps in reliably stripping prefixes and handling paths consistently
+src_dir_normalized=$(realpath "$src_dir_arg")
+
+required_space=$(du -s "$src_dir_normalized" | cut -f1)
+available_space=$(df "$trgt_dir" | tail -1 | awk '{print $4}')
+
+# Ensure space values are numbers before comparison for robustness
+if ! [[ "$required_space" =~ ^[0-9]+$ && "$available_space" =~ ^[0-9]+$ ]]; then
+    echo "Error: Could not determine disk space requirements. Values were: required='${required_space}', available='${available_space}'."
+    exit 1
+fi
+
+if [ "$available_space" -lt "$required_space" ]; then
+    echo "Not enough disk space in the target directory."
+    exit 1
+fi
+
+counter=1
+# Use null delimiters and explicit Bash syntax:
+find "${src_dir_normalized}" -type f ! -name ".*" -print0 | while IFS= read -r -d $'\0' file; do
+    # Calculate path relative to the (normalized) source directory
+    relative_path="${file#${src_dir_normalized}/}"
+    
+    original_basename=$(basename "$file") # Or: original_basename=$(basename "$relative_path")
+    relative_dirs_part=$(dirname "$relative_path")
+
+    dir_prefix_str=""
+    if [ "$relative_dirs_part" != "." ]; then # If the file is in a subdirectory
+        # Original line: dir_prefix_str="${relative_dirs_part//\//-}-"
+        
+        # New logic: Split relative_dirs_part by '/', take first 3 chars of each, join with '-'
+        IFS='/' read -r -a dir_components <<< "$relative_dirs_part"
+        short_prefix_parts=()
+        for component in "${dir_components[@]}"; do
+            if [ -n "$component" ]; then # Ensure component is not empty
+                short_prefix_parts+=("${component:0:3}") # Take first 3 chars
+            fi
+        done
+
+        if [ ${#short_prefix_parts[@]} -gt 0 ]; then
+            dir_prefix_str=$(printf "%s-" "${short_prefix_parts[@]}") # Joins with '-' and adds trailing '-'
+        fi
+    fi
+
+    # Separate filename from extension. Handles files with no extension.
+    # Note: find command already filters out hidden files (e.g. .bashrc), so original_basename won't start with "."
+    filename_component="$original_basename"
+    extension_component=""
+    if [[ "$original_basename" == *.* ]]; then # Check if there's a dot, indicating a potential extension
+        filename_component="${original_basename%.*}"
+        extension_component=".${original_basename##*.}" # Capture dot and extension
+    fi
+
+    unique_filename="${dir_prefix_str}${filename_component}-${counter}${extension_component}"
+
+    if cp "$file" "${trgt_dir}/${unique_filename}"; then
+        rm "$file"
+        ((counter++))
+    else
+        echo "Failed to copy $file. Skipping."
+    fi
+done

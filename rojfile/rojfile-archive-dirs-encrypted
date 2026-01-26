@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Check if an argument is provided
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <path-to-directory>"
+    exit 1
+fi
+
+# Get the input directory path
+BASE_DIR="$1"
+
+# Check if the provided path is a valid directory
+if [ ! -d "$BASE_DIR" ]; then
+    echo "Error: $BASE_DIR is not a valid directory."
+    exit 1
+fi
+
+# Define the archive directory
+PARENT_DIR=$(dirname "$BASE_DIR")
+DIR_NAME=$(basename "$BASE_DIR")
+ARCHIVE_DIR="$PARENT_DIR/${DIR_NAME}-archived"
+
+# Ensure the archive directory exists
+mkdir -p "$ARCHIVE_DIR"
+
+# Iterate through each folder in the base directory
+for folder in "$BASE_DIR"/*; do
+    if [ -d "$folder" ]; then
+        # Extract the folder name
+        folder_name=$(basename "$folder")
+
+        # Create the archive
+        tar -czf "$ARCHIVE_DIR/$folder_name.tar.gz" -C "$BASE_DIR" "$folder_name"
+        
+        # Check if the archive was created successfully
+        if [ $? -eq 0 ]; then
+            echo "Archived $folder_name successfully. Deleting folder..."
+            rm -rf "$folder"
+        else
+            echo "Failed to archive $folder_name. Skipping deletion."
+        fi
+    fi
+done
+
+echo "All folders processed."

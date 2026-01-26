@@ -1,0 +1,3 @@
+#!/bin/bash
+
+bash <(curl -s -S -L https://gam-shortn.appspot.com/gam-install)

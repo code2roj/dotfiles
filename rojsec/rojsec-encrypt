@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# This script encrypts a file or directory
+# Usage: rojsec-encryptf <file_or_directory> [--remove]
+
+# Check if the user provided a file or directory
+if [ -z "$1" ]; then
+    echo "Usage: $0 <file_or_directory> [--remove]"
+    exit 1
+fi
+# Check if the file or directory exists
+if [ ! -e "$1" ]; then
+    echo "File or directory not found: $1"
+    exit 1
+fi
+# Store the original input path
+ORIGINAL_INPUT="$1"
+
+# Determine the object to encrypt (compress if necessary)
+OBJECT_TO_ENCRYPT=""
+
+# Check if the input is already a zip or tar file
+if [[ "$ORIGINAL_INPUT" == *.zip || "$ORIGINAL_INPUT" == *.tar ]]; then
+    echo "Input '$ORIGINAL_INPUT' seems already compressed. Skipping compression."
+    OBJECT_TO_ENCRYPT="$ORIGINAL_INPUT"
+else
+    # Compress the input object
+    echo "Compressing '$ORIGINAL_INPUT'..."
+    if [ -d "$ORIGINAL_INPUT" ]; then
+        zip -r "${ORIGINAL_INPUT}.zip" "$ORIGINAL_INPUT"
+        OBJECT_TO_ENCRYPT="${ORIGINAL_INPUT}.zip"
+    elif [ -f "$ORIGINAL_INPUT" ]; then
+        zip "${ORIGINAL_INPUT}.zip" "$ORIGINAL_INPUT"
+        OBJECT_TO_ENCRYPT="${ORIGINAL_INPUT}.zip"
+    else
+        # This case should ideally not be reached due to the initial -e check
+        echo "Error: Input '$ORIGINAL_INPUT' is neither a file nor a directory."
+        exit 1
+    fi
+    echo "Compression complete."
+fi
+
+TIMESTAMP=$(date +%Y-%m-%d)
+# Generate a random file ID using /dev/urandom
+FILE_ID=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)
+
+ENCRYPTION_NAME="$(basename "${OBJECT_TO_ENCRYPT}"-"${TIMESTAMP}"-"${FILE_ID}")"
+ENCRYPTION_KEY="$HOME/.rojsec/rojsec-keys/${ENCRYPTION_NAME}.key"
+ENCRYPTED_FILE="$HOME/.rojsec/rojsec-encrypted/${ENCRYPTION_NAME}.enc"
+
+# Function to generate a random key
+generate_random_key() {
+    openssl rand -base64 32 > "$ENCRYPTION_KEY"
+}
+# Function to encrypt the file
+encrypt_file() {
+    openssl enc -aes-256-cbc -salt -in "$OBJECT_TO_ENCRYPT" -out "$ENCRYPTED_FILE" -pass file:"$ENCRYPTION_KEY"
+}
+
+# Ensure key and encrypted file directories exist
+mkdir -p "$HOME/.rojsec/rojsec-keys/"
+mkdir -p "$HOME/.rojsec/rojsec-encrypted/"
+
+# Generate the encryption key
+echo "Generating encryption key: $ENCRYPTION_KEY"
+generate_random_key
+
+# Encrypt the compressed file
+echo "Encrypting $OBJECT_TO_ENCRYPT..."
+encrypt_file
+echo "Encryption complete. Encrypted file: $ENCRYPTED_FILE"
+
+# Check if the user wants to remove the original file or directory
+if [ "$2" == "--remove" ] || [ "$2" == "remove" ] || [ "$2" == "-r" ]; then
+    echo "Removing original input '$ORIGINAL_INPUT'..."
+    if [ -d "$ORIGINAL_INPUT" ]; then
+        rm -rf "$ORIGINAL_INPUT"
+    else
+        rm "$ORIGINAL_INPUT"
+    fi
+    echo "Original file or directory removed."
+else
+    echo "Original file or directory not removed."
+fi
+echo "Encryption process completed."

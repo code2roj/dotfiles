@@ -1,0 +1,38 @@
+#!/home/roj/venvs/rojtext/bin/python
+
+import re
+import pandas as pd
+
+# Path to the input and output files
+input_file = "/home/roj/rojsidian/projects/behy-all/2024-12-30/document_pool/combined-dir-2024-12-29-ris.txt"
+output_file = "/home/roj/rojsidian/projects/behy-all/2024-12-30/document_pool/ris2cev.csv"
+
+# Open and read the RIS file
+with open(input_file, 'r') as file:
+    data = file.read()
+
+# Split entries using the ER tag
+entries = re.split(r'\nER\s+-\s*\n', data)
+
+# Define the fields you want to extract
+fields = ["TY", "ID", "DO", "T1", "JO", "PY", "VL", "IS", "SP", "AU"]
+
+# Parse each entry
+records = []
+for entry in entries:
+    record = {}
+    for field in fields:
+        matches = re.findall(rf'{field}\s+-\s+(.*)', entry)
+        if matches:
+            # Join multiple authors (AU) into a single string
+            record[field] = '; '.join(matches) if field == "AU" else matches[0]
+    if record:
+        records.append(record)
+
+# Convert the list of records to a DataFrame
+df = pd.DataFrame(records)
+
+# Save to CSV
+df.to_csv(output_file, index=False)
+
+print(f"Data has been converted to tabular format and saved to {output_file}.")

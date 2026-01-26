@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Load environment variables from multiple .env files
+load_env_file() {
+  if [ -f "$1" ]; then
+    echo "Loading environment variables from $1"
+    set -o allexport
+    source "$1"
+    set +o allexport
+  else
+    echo "File $1 not found"
+  fi
+}
+
+# Paths to .env files
+load_env_file "/home/roj/myshell/rojdb/.env.env"
+load_env_file "/home/roj/myshell/rojpt/.env"
+
+
+echo "Environment variables loaded successfully."

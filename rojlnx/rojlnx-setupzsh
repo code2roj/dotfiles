@@ -13,7 +13,7 @@ sudo apt install -y zsh git curl
 # --- Set Zsh as default shell ---
 if [[ "$(basename "$SHELL")" != "zsh" ]]; then
     echo "🐚 Setting Zsh as your default shell. You may be prompted for your password."
-    chsh -s "$(which zsh)"
+    sudo chsh -s "$(which zsh)"
 else
     echo "✅ Zsh is already your default shell."
 fi

@@ -35,4 +35,12 @@ read -p -r "Do you want to install mogodb? (y/n):" user_choice
     echo "Installed mogodb successfully"
 fi
 
+# Install the ZSH theme
+
+read -p -r "Do you want to install zsh themes? (y/n):" user_choice
+    if [[ "$user_choice" =~ ^[Yy]$ ]]; then
+    "$HOME/dotfiles/rojlnx/rojlnx-setupzsh.sh"
+fi
+
+
 

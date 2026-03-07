@@ -1,0 +1,52 @@
+#cloud-config
+hostname: roj-dev-vm
+
+users:
+  - name: roj
+    groups: [sudo, wheel, docker]
+    shell: /bin/zsh
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-rsa YOUR_PUBLIC_KEY_HERE
+
+package_update: true
+packages:
+  - zsh
+  - git
+  - curl
+  - wget
+  - unzip
+  - docker.io
+  - docker-compose
+
+runcmd:
+  # 1. Install Oh My Zsh
+  - sudo -u roj sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+  # 2. Themes and Plugins
+  - sudo -u roj git clone --depth=1 https://github.com/romkatv/powerlevel10k.git /home/roj/.oh-my-zsh/custom/themes/powerlevel10k
+  - sudo -u roj git clone https://github.com/zsh-users/zsh-autosuggestions /home/roj/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+  - sudo -u roj git clone https://github.com/zsh-users/zsh-syntax-highlighting.git /home/roj/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+  # 3. Your Dotfiles Repo
+  - sudo -u roj git clone https://github.com/code2roj/dotfiles.git /home/roj/dotfiles
+
+write_files:
+  - path: /home/roj/.zshrc
+    owner: roj:roj
+    permissions: '0644'
+    content: |
+      if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+        source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+      fi
+      export ZSH="$HOME/.oh-my-zsh"
+      ZSH_THEME="powerlevel10k/powerlevel10k"
+      plugins=(git zsh-autosuggestions zsh-syntax-highlighting docker)
+      source "$ZSH/oh-my-zsh.sh"
+      
+      # Path Logic pointing to your cloned repo
+      for dir in /home/roj/dotfiles/myshell/*; do
+          [ -d "$dir" ] && PATH="$PATH:$dir"
+      done
+      PATH="$HOME/dotfiles/rojfunc:$PATH"
+      PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+      export PATH
+      [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh

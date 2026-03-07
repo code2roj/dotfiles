@@ -3,10 +3,7 @@
 # Abbrechen bei Fehlern
 set -e
 
-# Dynamischer Pfad zum Skript-Ordner (wichtig für die Paketlisten)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "Starting rojlnx setup..."
+echo "Starting root setup..."
 
 # 1. Update system packages
 if command -v apt &> /dev/null; then
@@ -50,11 +47,15 @@ else
     sudo usermod -aG wheel "$DEFAULT_USER"
 fi
 
+sudo apt install unzip
+sudo apt install wget
+sudo apt install curl
+sudo apt install zip
+sudo apt install fontconfig
+
 # Log into the default user
 su "$DEFAULT_USER"
 
-# Clone the dotfiles repo
-git clone https://github.com/code2roj/dotfiles.git
 
 # Print success
-echo "Rojlnx initial setup completed."
+echo "root initial setup completed."

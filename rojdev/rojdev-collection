@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Check if an argument is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <COLLECTION-name>"
+  exit 1
+fi
+
+COLLECTION_NAME="$1"
+COLLECTION_DIR="$COLLECTION_NAME"
+
+mkdir -p "$COLLECTION_DIR"
+touch "$COLLECTION_DIR/$COLLECTION_NAME.ts"
+echo "Created COLLECTION: $COLLECTION_DIR/$COLLECTION_NAME.ts"
+mkdir "$COLLECTION_DIR/hooks"
+echo "Created hooks directory: $COLLECTION_DIR/hooks"
+

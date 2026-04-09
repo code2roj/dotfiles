@@ -11,6 +11,8 @@ COMPONENT_DIR="$COMPONENT_NAME"
 
 mkdir -p "$COMPONENT_DIR"
 touch "$COMPONENT_DIR/$COMPONENT_NAME.tsx"
+mkdir -p "$COMPONENT_DIR"
+touch "$COMPONENT_DIR/${COMPONENT_NAME}Client.tsx"
 echo "Created component: $COMPONENT_DIR/$COMPONENT_NAME.tsx"
 touch "$COMPONENT_DIR/$COMPONENT_NAME.module.css"
 echo "Created CSS module: $COMPONENT_DIR/$COMPONENT_NAME.module.css"
